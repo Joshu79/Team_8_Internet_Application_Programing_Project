@@ -1,4 +1,5 @@
 import { mockData } from '../data/mockTransactions'
+import SpendingChart from '../components/SpendingChart'
 
 const Dashboard = () => {
   return (
@@ -9,13 +10,9 @@ const Dashboard = () => {
       <p>Remaining budget: KES {mockData.remainingBudget}</p>
 
       <h2>Spending by category</h2>
-      <ul>
-        {Object.entries(mockData.categories).map(([category, amount]) => (
-          <li key={category}>
-            {category}: KES {amount}
-          </li>
-        ))}
-      </ul>
+      <div style={{ maxWidth: '400px' }}>
+        <SpendingChart categories={mockData.categories} />
+      </div>
     </div>
   )
 }
