@@ -57,3 +57,81 @@ nav a:hover {
   height: 400px;
   margin: 0 auto;
 }
+
+/* Shared button style */
+.cta-button {
+  display: inline-block;
+  background-color: #38bdf8;
+  color: #0f172a;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  text-decoration: none;
+  cursor: pointer;
+  margin-top: 1.5rem;
+}
+
+.cta-button:hover {
+  background-color: #0ea5e9;
+}
+
+/* Landing page */
+.landing {
+  text-align: center;
+  padding: 5rem 2rem;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.landing h1 {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.landing p {
+  color: #94a3b8;
+  font-size: 1.1rem;
+}
+
+/* Upload page */
+/* Upload page */
+.upload-page {
+  padding: 3rem 2rem;
+  max-width: 600px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.upload-page h1 {
+  line-height: 1.3;
+  margin-bottom: 1rem;
+}
+
+.upload-page p {
+  color: #94a3b8;
+  margin-bottom: 1.5rem;
+}
+
+.upload-box {
+  border: 2px dashed #334155;
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  margin-top: 1.5rem;
+}
+
+.upload-box p {
+  margin-bottom: 0.5rem;
+}
+
+/* Parent report page */
+.parent-report {
+  padding: 3rem 2rem;
+  max-width: 600px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.parent-report p {
+  color: #94a3b8;
+}

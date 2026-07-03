@@ -1,8 +1,11 @@
+import { Link } from 'react-router-dom'
+
 const Landing = () => {
   return (
-    <div>
+    <div className="landing">
       <h1>PesaTrack</h1>
-      <p>This is the landing page</p>
+      <p>See where your money actually goes — straight from your M-Pesa statement.</p>
+      <Link to="/upload" className="cta-button">Get Started</Link>
     </div>
   )
 }
