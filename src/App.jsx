@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import Navbar from './components/Navbar'
 import Landing from './pages/Landing'
 import Upload from './pages/Upload'
 import Dashboard from './pages/Dashboard'
@@ -8,6 +9,7 @@ import './App.css'
 const App = () => {
   return (
     <BrowserRouter>
+      <Navbar />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/upload" element={<Upload />} />
