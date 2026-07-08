@@ -1,4 +1,5 @@
 import { mockData } from '../data/mockTransactions'
+import Footer from '../components/Footer'
 
 const Dashboard = () => {
   return (
@@ -16,6 +17,7 @@ const Dashboard = () => {
           </li>
         ))}
       </ul>
+      <Footer/>
     </div>
   )
 }
