@@ -17,12 +17,6 @@ const Navbar = ({ isAuthenticated, logout, darkMode, setDarkMode }) => {
 
             <div className="collapse navbar-collapse justify-content-center" id="navbarcollapse">
                 <div className="navbar-nav">
-                    <button className='btn1'>
-                        <Link className='App-link text-light text-decoration-none' to='/'>
-                        <i className="bi bi-house-door-fill me-2"></i>Home
-                        </Link>
-                    </button> &nbsp;
-                    
 
                     {isAuthenticated ? (
                         <>
@@ -41,6 +35,11 @@ const Navbar = ({ isAuthenticated, logout, darkMode, setDarkMode }) => {
                         </>
                     ):(
                         <>
+                            <button className='btn1'>
+                                <Link className='App-link text-light text-decoration-none' to='/'>
+                                <i className="bi bi-house-door-fill me-2"></i>Home
+                                </Link>
+                            </button> &nbsp;
                            <button className='btn1'>
                                 <Link className='App-link text-light text-decoration-none' to="/SignIn">Sign In</Link>
                             </button> &nbsp;

@@ -25,7 +25,10 @@
             <div className='col-md-4'>
               <h3 className='text-dark'>About Us</h3>
               <p className='text-muted'>
-                Lorem, ipsum dolor sit amet consectetur adipisicing elit. Ab, eum totam ipsa cumque voluptate accusantium magni similique earum quaerat repudiandae rerum tempora rem repellendus ullam. Voluptas sunt dignissimos ipsam similique illum reiciendis reprehenderit asperiores architecto aliquam sint, voluptatem placeat quaerat?
+                    Pesa Tracker is a student project built by a team at Strathmore University
+    for our Web Application Development course. It's a personal finance
+    tracking tool that helps users log expenses, visualize spending by
+    category, and stay on top of their budget.
               </p>
             </div>
 
