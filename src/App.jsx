@@ -44,7 +44,7 @@ function App() {
   document.body.className = darkMode ? "dark-theme" : "light-theme";
   }, [darkMode]);
 
-  
+
 
   return (
     <>
@@ -57,7 +57,16 @@ function App() {
 
       <Routes>
         {/* Public Routes- pages that can be seen by the public even without login in */}
-        <Route path="/" element={<Landing />} />
+        <Route
+          path="/"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/dashboard" />
+            ) : (
+              <Landing />
+            )
+          }
+        />
 
         <Route
           path="/SignIn"
