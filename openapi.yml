@@ -1,0 +1,177 @@
+openapi: 3.0.0
+
+info:
+  title: StrathsBites API
+  version: 1.0.0
+
+paths:
+  /users/{id}/budget:
+    get:
+      summary: Retrieve the user's current monthly food budget
+
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 218795
+
+      responses:
+        '200':
+          description: Successfully retrieved the user's current monthly food budget
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - userId
+                  - monthlyBudget
+                properties:
+                  userId:
+                    type: integer
+                    example: 218795
+                  monthlyBudget:
+                    type: number
+                    format: double
+                    example: 15000.00
+
+    patch:
+      summary: Update or deduct from the user's current budget
+
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 218795
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - action
+                - amount
+              properties:
+                action:
+                  type: string
+                  enum:
+                    - deduct
+                    - update
+                  example: deduct
+                amount:
+                  type: number
+                  format: double
+                  example: 850.00
+
+      responses:
+        '200':
+          description: Successfully updated the user's budget
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - userId
+                  - monthlyBudget
+                  - remainingBudget
+                properties:
+                  userId:
+                    type: integer
+                    example: 218795
+                  monthlyBudget:
+                    type: number
+                    format: double
+                    example: 15000.00
+                  remainingBudget:
+                    type: number
+                    format: double
+                    example: 14150.00
+    delete:
+      summary: Delete the user's budget
+
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 218795
+
+      responses:
+        '200':
+          description: User's budget successfully deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - userId
+                  - message
+                properties:
+                  userId:
+                    type: integer
+                    example: 218795
+                  message:
+                    type: string
+                    example: Budget successfully deleted
+  /users/{id}/transactions:
+    post:
+      summary: Create a new transaction entry when an order is placed
+
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 218795
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - orderId
+                - amount
+              properties:
+                orderId:
+                  type: integer
+                  example: 1001
+                amount:
+                  type: number
+                  format: double
+                  example: 850.00
+
+      responses:
+        '201':
+          description: Transaction successfully created
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - transactionId
+                  - userId
+                  - orderId
+                  - amount
+                properties:
+                  transactionId:
+                    type: integer
+                    example: 501
+                  userId:
+                    type: integer
+                    example: 218795
+                  orderId:
+                    type: integer
+                    example: 1001
+                  amount:
+                    type: number
+                    format: double
+                    example: 850.00
