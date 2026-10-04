@@ -22,6 +22,7 @@ function requireBearer(req, res, next) {
 // THE MAPPING STEP: database row -> exactly the Budget schema in openapi.yaml
 function toBudget(row) {
   return {
+    //user_id: row.user_id,
     userId: row.user_id,                     // rename snake_case -> camelCase
     monthlyLimit: Number(row.monthly_limit), // MySQL DECIMAL comes back as a string; make it a number
     remaining: Number(row.remaining),
@@ -202,7 +203,12 @@ app.use((err, req, res, next) => {
   res.status(500).json({ code: 'INTERNAL_ERROR', message: 'Something went wrong on the server.' });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Pesa Tracker API running at http://localhost:${PORT}/v1`);
-});
+// Only start the server when you run "npm run dev", not when tests load this file
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`Pesa Tracker API running at http://localhost:${PORT}/v1`);
+  });
+}
+
+module.exports = app; // lets the test files use the app
