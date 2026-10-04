@@ -71,7 +71,13 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
+        '422':
+          description: >
+            A deduct would put the user's remaining budget below zero.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     delete:
       summary: Delete a user's budget
       description: >
