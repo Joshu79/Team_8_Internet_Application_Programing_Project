@@ -10,5 +10,4 @@
    3 hours early because mysql2 read DATETIME values as local time (UTC+3).
    Fixed by setting `timezone: 'Z'` in `db.js`.
 
-   Note: a `http://localhost:5000/v1` entry was added to `servers` so
    "Try it out" can reach the local server. This doesn't change the API.
