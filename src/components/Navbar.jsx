@@ -31,7 +31,8 @@ const Navbar = ({ isAuthenticated, logout, darkMode, setDarkMode }) => {
                             </button> &nbsp;
 
                             {/* logout button */}
-                            <button className='btn1' onClick={logout}>Logout</button>
+                            <button className='btn1 App-link text-light text-decoration-none' onClick={logout}>
+                                Logout</button>
                         </>
                     ):(
                         <>
