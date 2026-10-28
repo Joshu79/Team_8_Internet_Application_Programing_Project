@@ -6,6 +6,50 @@ const app = express();
 app.use(cors());          // lets Swagger (a different website) talk to this server
 app.use(express.json());
 
+// Read-only integration with the partner's monthly expenditure summary.
+// The partner URL and user ID are configured in server/.env.
+app.get('/v1/partner/expenses/summary', async (req, res, next) => {
+  const partnerUrl = process.env.PARTNER_API_URL?.replace(/\/$/, '');
+  const partnerUserId = process.env.PARTNER_USER_ID;
+  const month = req.query.month;
+
+  if (!partnerUrl || !partnerUserId) {
+    return res.status(503).json({ message: 'Partner spending is not configured yet.' });
+  }
+  if (typeof month !== 'string' || !/^\d{4}-\d{2}$/.test(month)) {
+    return res.status(400).json({ message: 'month must use YYYY-MM format.' });
+  }
+
+  try {
+    const url = `${partnerUrl}/users/${encodeURIComponent(partnerUserId)}/expenses/summary?month=${encodeURIComponent(month)}`;
+    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!response.ok) {
+      console.error('Partner spending request returned', response.status);
+      return res.status(502).json({ message: 'Partner spending is unavailable right now.' });
+    }
+
+    const summary = await response.json();
+    const requiredFields = ['userId', 'month', 'totalSpent', 'monthlyAllowance', 'remaining'];
+    const validSummary = summary && requiredFields.every((field) => field in summary) &&
+      ['totalSpent', 'monthlyAllowance', 'remaining'].every((field) => Number.isFinite(summary[field]));
+    if (!validSummary) {
+      console.error('Partner spending response did not match the documented summary shape');
+      return res.status(502).json({ message: 'Partner spending is unavailable right now.' });
+    }
+
+    return res.json({
+      userId: summary.userId,
+      month: summary.month,
+      totalSpent: summary.totalSpent,
+      monthlyAllowance: summary.monthlyAllowance,
+      remaining: summary.remaining,
+    });
+  } catch (err) {
+    console.error('Partner spending request failed:', err.cause?.code || err.message);
+    return res.status(502).json({ message: 'Partner spending is unavailable right now.' });
+  }
+});
+
 // The contract says every request needs "Authorization: Bearer <token>".
 // For now this only checks that the header is there; real token checking comes later.
 function requireBearer(req, res, next) {

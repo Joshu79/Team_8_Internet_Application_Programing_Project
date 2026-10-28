@@ -49,6 +49,25 @@ Authorization: Bearer <token>
 For now, **any non-empty token works**, e.g. `Bearer test`. Real token
 checking is coming later. Without the header you get a `401`.
 
+## Week 10: FitCoach spending summary
+
+The Dashboard can show FitCoach's monthly expense summary. The Pesa Tracker
+server calls the partner API so the partner URL and user ID stay out of the
+browser. Configure these values in `server/.env` using `server/.env.example`:
+
+```env
+PARTNER_API_URL=https://your-partner-host
+PARTNER_USER_ID=usr_1042
+```
+
+Use the live API root and user ID supplied by the partner. Include `/v1` in
+the URL only if the partner's actual endpoint uses that prefix. The integration
+calls `GET /users/{userId}/expenses/summary?month=YYYY-MM` and expects the
+fields documented in the partner's OpenAPI contract. Start the backend on port
+5000 and the Vite frontend; Vite proxies `/v1` requests to the backend. If the
+partner is unavailable or not configured, the dashboard shows a clear message
+and remains usable.
+
 ---
 
 ## Endpoints

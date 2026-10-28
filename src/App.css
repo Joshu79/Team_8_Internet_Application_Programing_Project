@@ -255,6 +255,65 @@ body {
   margin-right: 2px;
 }
 
+.partner-summary-section {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  margin-bottom: 2rem;
+  box-shadow: var(--shadow-card);
+}
+
+.partner-summary-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.partner-summary-heading h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.partner-summary-month {
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.partner-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.partner-summary-item {
+  background: var(--green-pale);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+}
+
+.partner-summary-message {
+  color: var(--ink-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.partner-summary-retry {
+  margin-top: 10px;
+  border: 1px solid var(--green-accent);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  color: var(--green-accent);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
 /* Chart section */
 .chart-section h2 {
   font-family: var(--font-display);

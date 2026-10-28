@@ -1,0 +1,7 @@
+# Week 10 Integration Log
+
+| # | What broke or needs clarification | Root cause / evidence | Fix or next action | Whose side, and who fixed it |
+
+| 1 | Initial partner summary request returned 404 | The displayed `bear-newton-pushed-represented` host returned `NOT_FOUND` for the documented summary path. The linked `narrative-agreed-its-viewpicture` host returned 200 for `/users/usr_1/expenses/summary?month=2026-10`, with the contract's expected fields. | Set `PARTNER_API_URL` to `https://narrative-agreed-its-viewpicture.trycloudflare.com` (no `/v1`) and `PARTNER_USER_ID` to `usr_1`. | Integration configuration; fixed by consumer |
+| 2 | Partner README and OpenAPI describe different API areas | README documents FitCoach account registration and subscription routes; OpenAPI describes expense summaries and categories. The linked expense endpoint responds according to the OpenAPI schema. | Use the OpenAPI contract for the spending-card integration. | Partner documentation; consumer confirmed the working contract endpoint |
+| 3 | Dashboard reported FitCoach spending unavailable | The local API on port 5000 was not listening, and the server dependencies were missing. | Installed the dependencies from the server lockfile. Start the backend with `npm run dev` from `server/`; in this environment, set `NODE_USE_ENV_PROXY=1` first so Node can reach the Cloudflare host. | Consumer runtime setup; fixed by consumer |
