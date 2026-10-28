@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const db = require('./db'); // your existing MySQL connection
@@ -5,6 +6,23 @@ const db = require('./db'); // your existing MySQL connection
 const app = express();
 app.use(cors());          // lets Swagger (a different website) talk to this server
 app.use(express.json());
+// Keys come from .env (API_KEYS), never from the code.
+const VALID_KEYS = (process.env.API_KEYS || '').split(',').filter(Boolean);
+console.log(`Loaded ${VALID_KEYS.length} API keys`); // prints the count only, never the keys
+
+function requireApiKey(req, res, next) {
+  const key = req.get('X-API-Key');
+  if (!key || !VALID_KEYS.includes(key)) {
+    return res.status(401).json({
+      code: 'UNAUTHORIZED',
+      message: 'Missing or invalid API key.',
+    });
+  }
+  req.apiKey = key;
+  next();
+}
+
+app.use(requireApiKey); // runs before every route below, including the partner one
 
 // Read-only integration with the partner's monthly expenditure summary.
 // The partner URL and user ID are configured in server/.env.
@@ -50,18 +68,7 @@ app.get('/v1/partner/expenses/summary', async (req, res, next) => {
   }
 });
 
-// The contract says every request needs "Authorization: Bearer <token>".
-// For now this only checks that the header is there; real token checking comes later.
-function requireBearer(req, res, next) {
-  const header = req.get('Authorization') || '';
-  if (!header.startsWith('Bearer ') || header.length <= 'Bearer '.length) {
-    return res.status(401).json({
-      code: 'UNAUTHORIZED',
-      message: 'Missing or invalid authentication token.',
-    });
-  }
-  next();
-}
+
 
 // THE MAPPING STEP: database row -> exactly the Budget schema in openapi.yaml
 function toBudget(row) {
@@ -76,7 +83,7 @@ function toBudget(row) {
 }
 
 // GET /users/{id}/budget  (operationId: getUserBudget)
-app.get('/v1/users/:id/budget', requireBearer, async (req, res) => {
+app.get('/v1/users/:id/budget',         async (req, res) => {
   // 1. Fetch real data. Selecting only these columns keeps internal ones (like id) out.
   const [rows] = await db.query(
     'SELECT user_id, monthly_limit, remaining, currency, updated_at FROM budgets WHERE user_id = ?',
@@ -95,7 +102,7 @@ app.get('/v1/users/:id/budget', requireBearer, async (req, res) => {
   return res.status(200).json(toBudget(rows[0]));
 });
 
-app.patch('/v1/users/:id/budget', requireBearer, async (req, res) => {
+app.patch('/v1/users/:id/budget', async (req, res) => {
   const { action, amount, currency } = req.body || {};
 
   // ---------- VALIDATION (your checks from before) ----------
@@ -141,7 +148,7 @@ app.patch('/v1/users/:id/budget', requireBearer, async (req, res) => {
   return res.status(200).json(toBudget(updated[0]));
 });
 
-app.delete('/v1/users/:id/budget', requireBearer, async (req, res) => {
+app.delete('/v1/users/:id/budget',         async (req, res) => {
   const [result] = await db.query(
     'DELETE FROM budgets WHERE user_id = ?',
     [req.params.id]
@@ -171,7 +178,7 @@ function toTransaction(row) {
   };
 }
 
-app.post('/v1/users/:id/transactions', requireBearer, async (req, res) => {
+app.post('/v1/users/:id/transactions',         async (req, res) => {
   const { orderId, amount, items, currency, placedAt } = req.body || {};
 
   // ---------- VALIDATION (from the TransactionInput schema) ----------
