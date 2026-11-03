@@ -12,7 +12,7 @@ servers:
     description: Production server
 
 security:
-  - bearerAuth: []
+  - apiKeyAuth: []
 
 paths:
   /users/{id}/budget:
@@ -41,6 +41,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -69,6 +71,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '404':
           $ref: '#/components/responses/NotFound'
         '422':
@@ -91,6 +95,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -130,6 +136,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '404':
           $ref: '#/components/responses/NotFound'
         '422':
@@ -142,10 +150,11 @@ paths:
 
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Each consumer has its own key. Ask the team for yours privately.
 
   schemas:
     Budget:
@@ -311,7 +320,19 @@ components:
             $ref: '#/components/schemas/Error'
 
     Unauthorized:
-      description: Missing or invalid authentication token.
+      description: Missing or invalid X-API-Key header.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    RateLimited:
+      description: Too many requests from this key. Wait for the Retry-After number of seconds, then try again.
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying.
+          schema:
+            type: integer
       content:
         application/json:
           schema:
