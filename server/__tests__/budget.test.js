@@ -1,9 +1,10 @@
 const request = require('supertest');
+process.env.API_KEYS = 'test-key'; // test-only key
 const app = require('../index');
 const db = require('../db');
 
 const TEST_USER = 'usr_test_jest';
-const AUTH = { Authorization: 'Bearer test' };
+const AUTH = { 'X-API-Key': 'test-key' };
 
 // ARRANGE (runs before EVERY test): give the test student a fresh, known budget
 beforeEach(async () => {

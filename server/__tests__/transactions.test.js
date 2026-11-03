@@ -1,9 +1,10 @@
 const request = require('supertest');
+process.env.API_KEYS = 'test-key'; // test-only key
 const app = require('../index');
 const db = require('../db');
 
 const TEST_USER = 'usr_test_jest_txn';
-const AUTH = { Authorization: 'Bearer test' };
+const AUTH = { 'X-API-Key': 'test-key' };
 const validOrder = { orderId: 'ord_test_1', amount: 450, items: ['Shawarma'], currency: 'KES' };
 
 // ARRANGE: fresh test student with 8700 remaining, and no old transactions
