@@ -78,6 +78,11 @@ const Dashboard = () => {
             <button className="partner-summary-retry" onClick={() => setRetryCount((count) => count + 1)}>Try again</button>
           </div>
         )}
+        {partnerStatus === 'loaded' && partnerSummary.stale && (
+          <p className="partner-summary-message" role="status">
+            Showing saved data from {partnerSummary.asOf ? new Date(partnerSummary.asOf).toLocaleString() : 'an earlier time'}. The partner is not responding.
+          </p>
+        )}
         {partnerStatus === 'loaded' && (
           <div className="partner-summary-grid">
             <article className="partner-summary-item">

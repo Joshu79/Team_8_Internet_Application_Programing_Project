@@ -1,7 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const db = require('./db'); // your existing MySQL connection
+const db = require('./db');
+const { fetchWithRetry } = require('./resilientFetch'); // your existing MySQL connection
 
 const app = express();
 app.use(cors());          // lets Swagger (a different website) talk to this server
@@ -22,11 +23,23 @@ function requireApiKey(req, res, next) {
   next();
 }
 
-app.use(requireApiKey); // runs before every route below, including the partner one
+// Health check: open http://localhost:5000/ or /v1 in a browser to see the server is up
+app.get(['/', '/v1'], (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Pesa Tracker API is running',
+    docs: 'See README.md for how to call the endpoints',
+  });
+});
+
+//app.use(requireApiKey); // runs before every route below, including the partner one
 
 // Read-only integration with the partner's monthly expenditure summary.
 // The partner URL and user ID are configured in server/.env.
-app.get('/v1/partner/expenses/summary', async (req, res, next) => {
+// Keeps the last good partner summary for each month, so we can fall back to it.
+const lastGoodByMonth = new Map();
+
+app.get('/v1/partner/expenses/summary', async (req, res) => {
   const partnerUrl = process.env.PARTNER_API_URL?.replace(/\/$/, '');
   const partnerUserId = process.env.PARTNER_USER_ID;
   const month = req.query.month;
@@ -38,37 +51,43 @@ app.get('/v1/partner/expenses/summary', async (req, res, next) => {
     return res.status(400).json({ message: 'month must use YYYY-MM format.' });
   }
 
+  // If the partner fails, send the saved copy (marked stale) or a friendly message.
+  const sendFallback = (reason) => {
+    console.error('Partner spending unavailable:', reason);
+    const saved = lastGoodByMonth.get(month);
+    if (saved) return res.json({ ...saved, stale: true });
+    return res.status(502).json({ message: 'Partner spending is unavailable right now.' });
+  };
+
   try {
     const url = `${partnerUrl}/users/${encodeURIComponent(partnerUserId)}/expenses/summary?month=${encodeURIComponent(month)}`;
-    const response = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!response.ok) {
-      console.error('Partner spending request returned', response.status);
-      return res.status(502).json({ message: 'Partner spending is unavailable right now.' });
-    }
+    const response = await fetchWithRetry(url, { headers: { Accept: 'application/json' } }, { timeoutMs: 1500, retries: 2, delayMs: 200 });
+    if (!response.ok) return sendFallback(`partner returned ${response.status}`);
 
     const summary = await response.json();
     const requiredFields = ['userId', 'month', 'totalSpent', 'monthlyAllowance', 'remaining'];
     const validSummary = summary && requiredFields.every((field) => field in summary) &&
       ['totalSpent', 'monthlyAllowance', 'remaining'].every((field) => Number.isFinite(summary[field]));
-    if (!validSummary) {
-      console.error('Partner spending response did not match the documented summary shape');
-      return res.status(502).json({ message: 'Partner spending is unavailable right now.' });
-    }
+    if (!validSummary) return sendFallback('response did not match the documented shape');
 
-    return res.json({
+    const good = {
       userId: summary.userId,
       month: summary.month,
       totalSpent: summary.totalSpent,
       monthlyAllowance: summary.monthlyAllowance,
       remaining: summary.remaining,
-    });
+      stale: false,
+      asOf: new Date().toISOString(),
+    };
+    lastGoodByMonth.set(month, good);
+    return res.json(good);
   } catch (err) {
-    console.error('Partner spending request failed:', err.cause?.code || err.message);
-    return res.status(502).json({ message: 'Partner spending is unavailable right now.' });
+    const reason = err.name === 'TimeoutError' ? 'timeout' : (err.cause?.code || err.message);
+    return sendFallback(reason);
   }
 });
 
-
+app.use(requireApiKey);
 
 // THE MAPPING STEP: database row -> exactly the Budget schema in openapi.yaml
 function toBudget(row) {
@@ -81,6 +100,7 @@ function toBudget(row) {
     updatedAt: new Date(row.updated_at).toISOString().replace(/\.\d{3}Z$/, 'Z'), // ISO date-time
   };
 }
+
 
 // GET /users/{id}/budget  (operationId: getUserBudget)
 app.get('/v1/users/:id/budget',         async (req, res) => {
@@ -240,6 +260,23 @@ app.post('/v1/users/:id/transactions',         async (req, res) => {
     throw err;
   } finally {
     conn.release(); // give the connection back to the pool
+  }
+});
+
+app.get('/v1/fitcoach/users/:id/summary', async (req, res) => {
+  try {
+    const r = await fetch(`${process.env.FITCOACH_URL}/users/${req.params.id}/expenses/summary`, {
+      headers: { 'X-API-Key': process.env.FITCOACH_API_KEY }, // header name from their README
+    });
+    if (!r.ok) {
+      console.error('fitcoach returned', r.status); // log the status, never the key
+      return res.status(502).json({ code: 'UPSTREAM_ERROR', message: 'FitCoach data unavailable' });
+    }
+    const s = await r.json();
+    res.json({ userId: req.params.id, totalSpent: s.totalSpent, remaining: s.remaining });
+  } catch (err) {
+    console.error('fitcoach call failed:', err.cause?.code || err.message);
+    res.status(502).json({ code: 'UPSTREAM_ERROR', message: 'FitCoach data unavailable' });
   }
 });
 

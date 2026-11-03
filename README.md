@@ -16,7 +16,7 @@ If the API is already running (see "Run it locally" below, or use the URL the
 team gave you instead of `localhost:5000`), open **Command Prompt (cmd)** and run:
 
 ```
-curl -H "Authorization: Bearer test" http://localhost:5000/v1/users/usr_7f2a9c1e/budget
+curl -H "X-API-Key: <your-api-key>" http://localhost:5000/v1/users/usr_7f2a9c1e/budget
 ```
 
 You should get back:
@@ -42,12 +42,10 @@ You should get back:
 
 Every request needs this header:
 
-```
-Authorization: Bearer <token>
-```
+X-API-Key: <your-api-key>
 
-For now, **any non-empty token works**, e.g. `Bearer test`. Real token
-checking is coming later. Without the header you get a `401`.
+Each consumer has its own key. Ask the team for yours privately. Without a
+valid key you get a `401`.
 
 ## Week 10: FitCoach spending summary
 
@@ -78,7 +76,7 @@ All paths start with `http://localhost:5000/v1`. The test user
 ### Get a budget: `GET /users/{id}/budget`
 
 ```
-curl -H "Authorization: Bearer test" http://localhost:5000/v1/users/usr_7f2a9c1e/budget
+curl -H "X-API-Key: <your-api-key>" http://localhost:5000/v1/users/usr_7f2a9c1e/budget
 ```
 
 → `200` with the budget (same as the Quickstart above).
@@ -90,7 +88,7 @@ curl -H "Authorization: Bearer test" http://localhost:5000/v1/users/usr_7f2a9c1e
 `currency` must be `"KES"`.
 
 ```
-curl -X PATCH -H "Authorization: Bearer test" -H "Content-Type: application/json" -d "{\"action\":\"update\",\"amount\":15000,\"currency\":\"KES\"}" http://localhost:5000/v1/users/usr_7f2a9c1e/budget
+curl -X PATCH -H "X-API-Key: <your-api-key>" -H "Content-Type: application/json" -d "{\"action\":\"update\",\"amount\":15000,\"currency\":\"KES\"}" http://localhost:5000/v1/users/usr_7f2a9c1e/budget
 ```
 
 → `200`:
@@ -113,7 +111,7 @@ Saves the order **and** deducts `amount` from the budget's `remaining`.
 `items` must have at least one item. `placedAt` is optional.
 
 ```
-curl -X POST -H "Authorization: Bearer test" -H "Content-Type: application/json" -d "{\"orderId\":\"ord_1001\",\"amount\":450,\"items\":[\"Shawarma\"],\"currency\":\"KES\"}" http://localhost:5000/v1/users/usr_7f2a9c1e/transactions
+curl -X POST -H "X-API-Key: <your-api-key>" -H "Content-Type: application/json" -d "{\"orderId\":\"ord_1001\",\"amount\":450,\"items\":[\"Shawarma\"],\"currency\":\"KES\"}" http://localhost:5000/v1/users/usr_7f2a9c1e/transactions
 ```
 
 → `201`:
@@ -136,7 +134,7 @@ curl -X POST -H "Authorization: Bearer test" -H "Content-Type: application/json"
 ### Delete a budget: `DELETE /users/{id}/budget`
 
 ```
-curl -X DELETE -H "Authorization: Bearer test" http://localhost:5000/v1/users/usr_7f2a9c1e/budget
+curl -X DELETE -H "X-API-Key: <your-api-key>" http://localhost:5000/v1/users/usr_7f2a9c1e/budget
 ```
 
 → `204` with an empty body. This really deletes the test user. To get them
@@ -157,7 +155,7 @@ Every error has the same shape, so check the status code first and then `code`:
 | 400 | `VALIDATION_ERROR` | A field is missing, the wrong type, or not allowed (e.g. `"amount": "450"` in quotes, empty `items`, currency other than KES) |
 | 401 | `UNAUTHORIZED` | No `Authorization: Bearer ...` header |
 | 404 | `NOT_FOUND` | That user has no budget, or the URL doesn't exist |
-| 422 | `BUDGET_EXCEEDED` | The amount is more than the budget has left |
+| 401 | `UNAUTHORIZED` | No `X-API-Key` header, or the key isn't valid |
 | 500 | `INTERNAL_ERROR` | Something broke on the server (usually the database is off) |
 
 ---
@@ -183,6 +181,7 @@ DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=your_mysql_password
 DB_NAME=pesa_tracker
+API_KEYS=your-key-for-team,your-key-for-partner
 ```
 
 **3. Create the database, tables, and test user.** Log in to MySQL
