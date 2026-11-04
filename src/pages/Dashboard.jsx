@@ -3,12 +3,16 @@ import { mockData } from '../data/mockTransactions'
 import SpendingChart from '../components/SpendingChart'
 import Footer from '../components/Footer'
 
-const Dashboard = () => {
+const Dashboard = ({ user }) => {
   const [partnerSummary, setPartnerSummary] = useState(null)
   const [partnerStatus, setPartnerStatus] = useState('loading')
   const [retryCount, setRetryCount] = useState(0)
   const today = new Date()
   const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+  const monthLabel = new Intl.DateTimeFormat('en-KE', { month: 'long', year: 'numeric' }).format(today)
+  const rawName = user?.name || user?.username || user?.fullName || user?.email?.split('@')[0] || 'there'
+  const firstName = rawName.trim().split(/\s+/)[0] || 'there'
+  const greetingName = firstName.charAt(0).toUpperCase() + firstName.slice(1)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -37,8 +41,8 @@ const Dashboard = () => {
   return (
     <div className="dashboard">
       <div className="dashboard-header">
-        <h1>Dashboard</h1>
-        <span className="dashboard-period">{mockData.month}</span>
+        <h1>Welcome {greetingName}</h1>
+        <time className="dashboard-period" dateTime={currentMonth}>{monthLabel}</time>
       </div>
 
       <div className="dashboard-summary">

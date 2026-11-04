@@ -18,24 +18,19 @@ const ContactUs = () => {
       <main className="main">
         {/* Page Title */}
         <div className="page-title-section" data-aos="fade-down">
-          <div className="container-fluid">
-            <br />
-            <h1 className="contact-title">Get in Touch</h1>
-            <p className="contact-subtitle">
-              We would love to hear from you! Whether you have questions, feedback, or suggestions — reach out anytime.
-            </p>
-          </div>
+          <h1 className="contact-title">Get in Touch</h1>
+          <p className="contact-subtitle">
+            We would love to hear from you! Whether you have questions, feedback, or suggestions — reach out anytime.
+          </p>
         </div>
-        <br />
-        <br />
 
         {/* Contact Info Cards */}
         <section id="contact" className="contact section">
           <div className="container-fluid">
             <div className="row gy-4 mb-5">
               <div className="col-lg-4" data-aos="fade-up" data-aos-delay="100">
-                <div className="info-card elegant-card rounded-4 shadow-sm">
-                  <div className="icon-circle bg-gradient-purple">
+                <div className="info-card">
+                  <div className="icon-circle">
                     <i className="bi bi-geo-alt-fill"></i>
                   </div>
                   <h4>Address</h4>
@@ -44,8 +39,8 @@ const ContactUs = () => {
               </div>
 
               <div className="col-lg-4" data-aos="fade-up" data-aos-delay="200">
-                <div className="info-card elegant-card rounded-4 shadow-sm">
-                  <div className="icon-circle bg-gradient-blue">
+                <div className="info-card">
+                  <div className="icon-circle">
                     <i className="bi bi-telephone-fill"></i>
                   </div>
                   <h4>Contact</h4>
@@ -57,8 +52,8 @@ const ContactUs = () => {
               </div>
 
               <div className="col-lg-4" data-aos="fade-up" data-aos-delay="300">
-                <div className="info-card elegant-card rounded-4 shadow-sm">
-                  <div className="icon-circle bg-gradient-green">
+                <div className="info-card">
+                  <div className="icon-circle">
                     <i className="bi bi-clock-fill"></i>
                   </div>
                   <h4>Hours</h4>

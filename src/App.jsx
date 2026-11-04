@@ -108,7 +108,7 @@ function App() {
           path="/dashboard"
           element={
             isAuthenticated ? (
-              <Dashboard />
+              <Dashboard user={user} />
             ) : (
               <Navigate to="/SignIn" />
             )

@@ -21,11 +21,17 @@ const SignIn = ({ setUser }) => {
     setLoading(true);
 
     try {
-      // Temporary test account
+      // Temporary test account: use the email prefix as a display name until authentication is connected.
+      const displayName = Email.trim().split('@')[0]
+        .replace(/[._-]+/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ') || 'User';
       const fakeUser = {
       id: 1,
-      email: "pesatrack@gmail.com",
-      name: "Developer"
+      email: Email.trim(),
+      name: displayName
     };
 
     localStorage.setItem("user", JSON.stringify(fakeUser));
