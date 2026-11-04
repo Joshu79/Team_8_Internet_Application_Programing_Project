@@ -2,7 +2,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { useState, useEffect } from "react";
-import axios from 'axios';
 import Footer from './Footer';
 
 const SignUp = ({ setUser }) => {
@@ -28,7 +27,7 @@ const SignUp = ({ setUser }) => {
 
   const checkPasswordStrength = (password) => {
     let strength = "";
-    if (password.length < 6) strength = "Weak";
+    if (password.length < 8) strength = "Weak";
     else if (/[A-Z]/.test(password) && /\d/.test(password) && /[\W]/.test(password))
       strength = "Strong";
     else strength = "Moderate";
@@ -48,25 +47,18 @@ const SignUp = ({ setUser }) => {
     }
 
     try {
-      const formData = new FormData();
-      formData.append("username", Username);
-      formData.append("email", Email);
-      formData.append("password", Password);
-      formData.append("phone", Phone);
+      const response = await fetch('/v1/app/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ name: Username, email: Email, password: Password, phone: Phone }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || 'Registration failed. Please try again.');
 
-      const response = await axios.post(
-        "https://Joshu.pythonanywhere.com/api/signup",
-        formData
-      );
-
-      setLoading(false);
-      setSuccess(response.data.Success || "Registration successful");
-
-      if (response.data.user) {
-        localStorage.setItem("user", JSON.stringify(response.data.user));
-        setUser && setUser(response.data.user);
-      }
-      navigate("/", { replace: true });
+      setSuccess('Account created. Opening your dashboard…');
+      setUser?.(data.user);
+      navigate('/dashboard', { replace: true });
 
       // Clear form
       setUsername("");
@@ -75,8 +67,11 @@ const SignUp = ({ setUser }) => {
       setConfirmPassword("");
       setPhone("");
     } catch (error) {
+      setError(error instanceof TypeError
+        ? 'Could not reach Pesa Tracker. Start the API server and database, then try again.'
+        : error.message || 'Registration failed. Please try again.');
+    } finally {
       setLoading(false);
-      setError("Error: " + error.message);
     }
   };
 
@@ -133,6 +128,7 @@ const SignUp = ({ setUser }) => {
                   type={showPassword ? "text" : "password"}
                   className="form-control"
                   value={Password}
+                  minLength={8}
                   onChange={e => {
                     setPassword(e.target.value);
                     checkPasswordStrength(e.target.value);

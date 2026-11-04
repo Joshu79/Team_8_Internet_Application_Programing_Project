@@ -171,8 +171,9 @@ cd Team_8_Internet_Application_Programing_Project\server
 npm install
 ```
 
-**2. Create a file called `.env` inside the `server` folder** with your own
-MySQL details:
+**2. Configure `server/.env`.** Start from `.env.example` if you do not have a
+local `.env` yet. Keep any existing partner settings and add your own MySQL
+connection details. Never commit this file.
 
 ```
 DB_HOST=localhost
@@ -183,35 +184,20 @@ DB_NAME=pesa_tracker
 API_KEYS=your-key-for-team,your-key-for-partner
 ```
 
-**3. Create the database, tables, and test user.** Log in to MySQL
-(`mysql -u root -p`) and paste:
+**3. Create the database tables.** Open a MySQL client and run the schema file:
+
+```text
+SOURCE C:/path/to/Team_8_Internet_Application_Programing_Project/server/schema.sql;
+```
+
+For an existing database, run `server/migrations/001_app_accounts_and_categories.sql`
+once instead. It adds the account/session tables and expense category column.
+New users register through the app. To seed the sample user used by the
+partner API Quickstart, optionally run:
 
 ```sql
-CREATE DATABASE IF NOT EXISTS pesa_tracker;
-USE pesa_tracker;
-
-CREATE TABLE IF NOT EXISTS budgets (
-  id            INT AUTO_INCREMENT PRIMARY KEY,
-  user_id       VARCHAR(50)   NOT NULL UNIQUE,
-  monthly_limit DECIMAL(10,2) NOT NULL,
-  remaining     DECIMAL(10,2) NOT NULL,
-  currency      CHAR(3)       NOT NULL DEFAULT 'KES',
-  updated_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS transactions (
-  id         INT AUTO_INCREMENT PRIMARY KEY,
-  user_id    VARCHAR(50)   NOT NULL,
-  order_id   VARCHAR(50)   NOT NULL,
-  amount     DECIMAL(10,2) NOT NULL,
-  items      JSON          NOT NULL,
-  currency   CHAR(3)       NOT NULL,
-  placed_at  DATETIME      NOT NULL,
-  created_at DATETIME      NOT NULL
-);
-
 INSERT IGNORE INTO budgets (user_id, monthly_limit, remaining, currency, updated_at)
-VALUES ('usr_7f2a9c1e', 13000.00, 8700.00, 'KES', '2026-09-07 14:32:00');
+VALUES ('usr_7f2a9c1e', 13000.00, 8700.00, 'KES', UTC_TIMESTAMP());
 ```
 
 **4. Start the server** (still inside `server`):
@@ -221,7 +207,21 @@ npm run dev
 ```
 
 You should see `Pesa Tracker API running at http://localhost:5000/v1`.
-Now try the Quickstart command in a second terminal.
+Then start the frontend from the repository root in a second terminal with
+`npm run dev`, open its local URL, and create an account. The dashboard and
+manual expense form require the database to be running.
+
+The web app uses database-backed accounts and an HttpOnly session cookie. Its
+budget and expense routes are separate from the existing API-key routes used by
+partner applications; the partner API request and response contracts remain
+unchanged.
+
+The web app uses `GET /v1/app/dashboard?month=YYYY-MM`, `PUT /v1/app/budget`,
+`POST /v1/app/budget/adjust`, and `POST /v1/app/expenses` after sign-in.
+Monthly remaining balance is calculated from that month's saved transactions
+and budget. Budget adjustments accept `add` and `subtract`; reductions cannot
+make the budget itself negative. PDF statement parsing is not implemented yet;
+the app currently supports manual entries.
 
 **Run the automated tests:** `npx jest` (inside `server`)
 

@@ -4,6 +4,8 @@ const cors = require('cors');
 const db = require('./db');
 const { fetchWithRetry } = require('./resilientFetch'); // your existing MySQL connection
 const { rateLimit } = require('express-rate-limit');
+const { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } = require('node:crypto');
+const { promisify } = require('node:util');
 const { monitor, statsHandler } = require('./monitoring');
 
 const app = express();
@@ -16,6 +18,117 @@ const VALID_KEYS = (process.env.API_KEYS || '')
   .map((k) => k.trim())   // ignore stray spaces or newlines around a key
   .filter(Boolean);
 console.log(`Loaded ${VALID_KEYS.length} API keys`); // prints the count only, never the keys
+
+const scryptAsync = promisify(scrypt);
+const SESSION_COOKIE = 'pesa_tracker_session';
+const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+const EXPENSE_CATEGORIES = new Set([
+  'Food', 'Transport', 'Airtime', 'Entertainment', 'Rent',
+  'Education', 'Health', 'Shopping', 'Other', 'Campus & supplies',
+  'Subscriptions', 'Fitness', 'Utilities', 'Personal care',
+  'Family & support', 'Savings', 'Travel',
+]);
+
+function readCookie(req, name) {
+  const prefix = `${name}=`;
+  const cookie = (req.headers.cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith(prefix));
+  if (!cookie) return null;
+  try {
+    return decodeURIComponent(cookie.slice(prefix.length));
+  } catch {
+    return null;
+  }
+}
+
+function setSessionCookie(res, token) {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_DURATION_MS / 1000}${secure}`);
+}
+
+function clearSessionCookie(res) {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`);
+}
+
+function safeUser(row) {
+  return { id: row.user_id, name: row.display_name, email: row.email, phone: row.phone || '' };
+}
+
+async function createAppSession(userId, res) {
+  const token = randomBytes(32).toString('hex');
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const expiresAt = new Date(Date.now() + SESSION_DURATION_MS).toISOString().slice(0, 19).replace('T', ' ');
+  await db.query(
+    'INSERT INTO app_sessions (session_hash, user_id, expires_at) VALUES (?, ?, ?)',
+    [tokenHash, userId, expiresAt]
+  );
+  setSessionCookie(res, token);
+}
+
+async function requireSession(req, res, next) {
+  try {
+    const token = readCookie(req, SESSION_COOKIE);
+    if (!token) return res.status(401).json({ code: 'UNAUTHORIZED', message: 'Please sign in to continue.' });
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const [rows] = await db.query(
+      `SELECT u.user_id, u.display_name, u.email, u.phone
+       FROM app_sessions s JOIN app_users u ON u.user_id = s.user_id
+       WHERE s.session_hash = ? AND s.expires_at > UTC_TIMESTAMP()`,
+      [tokenHash]
+    );
+    if (!rows.length) {
+      clearSessionCookie(res);
+      return res.status(401).json({ code: 'UNAUTHORIZED', message: 'Your session has expired. Please sign in again.' });
+    }
+    req.appUser = safeUser(rows[0]);
+    req.sessionHash = tokenHash;
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { code: 'RATE_LIMITED', message: 'Too many sign-in attempts. Please try again later.' },
+});
+
+function monthBounds(month) {
+  if (typeof month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return null;
+  const [year, monthNumber] = month.split('-').map(Number);
+  const nextMonth = new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10);
+  return { start: `${month}-01`, end: nextMonth };
+}
+
+function isValidDate(date) {
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
+}
+
+function currentLocalMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function transactionDescription(row) {
+  const items = typeof row.items === 'string' ? JSON.parse(row.items) : row.items;
+  return Array.isArray(items) && items.length ? items.join(', ') : 'Expense';
+}
+
+function appExpense(row) {
+  return {
+    id: `txn_${String(row.id).padStart(8, '0')}`,
+    amount: Number(row.amount),
+    description: transactionDescription(row),
+    category: row.category || 'Other',
+    date: new Date(row.placed_at).toISOString().slice(0, 10),
+    currency: row.currency,
+  };
+}
 
 function requireApiKey(req, res, next) {
   const key = req.get('X-API-Key');
@@ -90,6 +203,303 @@ app.get('/v1/partner/expenses/summary', async (req, res) => {
   } catch (err) {
     const reason = err.name === 'TimeoutError' ? 'timeout' : (err.cause?.code || err.message);
     return sendFallback(reason);
+  }
+});
+
+// First-party web app account routes use an HttpOnly server-side session.
+// Partner API keys are never exposed to browser JavaScript.
+app.post('/v1/app/auth/register', authLimiter, async (req, res) => {
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const phone = typeof req.body?.phone === 'string' && req.body.phone.trim() ? req.body.phone.trim() : null;
+
+  if (!name || name.length > 80) {
+    return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Name must be between 1 and 80 characters.' });
+  }
+  if (email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Enter a valid email address.' });
+  }
+  if (password.length < 8 || password.length > 200) {
+    return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Password must be at least 8 characters.' });
+  }
+  if (phone && phone.length > 30) {
+    return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Phone number must be 30 characters or fewer.' });
+  }
+
+  const salt = randomBytes(16);
+  const passwordHash = (await scryptAsync(password, salt, 64)).toString('hex');
+  const userId = `usr_${randomBytes(8).toString('hex')}`;
+  try {
+    await db.query(
+      'INSERT INTO app_users (user_id, display_name, email, phone, password_hash) VALUES (?, ?, ?, ?, ?)',
+      [userId, name, email, phone, `${salt.toString('hex')}:${passwordHash}`]
+    );
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ code: 'EMAIL_IN_USE', message: 'An account with that email already exists.' });
+    }
+    throw error;
+  }
+
+  const user = { id: userId, name, email, phone: phone || '' };
+  await createAppSession(userId, res);
+  res.set('Cache-Control', 'no-store');
+  return res.status(201).json({ user });
+});
+
+app.post('/v1/app/auth/login', authLimiter, async (req, res) => {
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const [rows] = await db.query(
+    'SELECT user_id, display_name, email, phone, password_hash FROM app_users WHERE email = ?',
+    [email]
+  );
+  if (!password) {
+    return res.status(401).json({ code: 'UNAUTHORIZED', message: 'Email or password is incorrect.' });
+  }
+
+  const [saltHex, expectedHex] = rows.length
+    ? rows[0].password_hash.split(':')
+    : ['00'.repeat(16), '00'.repeat(64)];
+  const expected = Buffer.from(expectedHex || '', 'hex');
+  const actual = await scryptAsync(password, Buffer.from(saltHex, 'hex'), expected.length || 64);
+  if (!rows.length || expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+    return res.status(401).json({ code: 'UNAUTHORIZED', message: 'Email or password is incorrect.' });
+  }
+
+  await createAppSession(rows[0].user_id, res);
+  res.set('Cache-Control', 'no-store');
+  return res.json({ user: safeUser(rows[0]) });
+});
+
+app.get('/v1/app/auth/me', requireSession, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  return res.json({ user: req.appUser });
+});
+
+app.post('/v1/app/auth/logout', requireSession, async (req, res) => {
+  await db.query('DELETE FROM app_sessions WHERE session_hash = ?', [req.sessionHash]);
+  clearSessionCookie(res);
+  return res.status(204).end();
+});
+
+// These UI routes derive the user ID from the signed-in session. They do not
+// replace or change the API-key-protected routes used by partner applications.
+app.use('/v1/app', requireSession);
+
+app.get('/v1/app/dashboard', async (req, res) => {
+  const month = req.query.month || currentLocalMonth();
+  const bounds = monthBounds(month);
+  if (!bounds) return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'month must be a valid YYYY-MM value.' });
+
+  const [budgetRows] = await db.query(
+    'SELECT monthly_limit FROM app_monthly_budgets WHERE user_id = ? AND month = ?',
+    [req.appUser.id, month]
+  );
+  const [rows] = await db.query(
+    `SELECT id, amount, items, currency, placed_at, category
+     FROM transactions
+     WHERE user_id = ? AND placed_at >= ? AND placed_at < ?
+     ORDER BY placed_at DESC, id DESC`,
+    [req.appUser.id, bounds.start, bounds.end]
+  );
+
+  const expenses = rows.map(appExpense);
+  const totalSpent = expenses.reduce((total, expense) => total + expense.amount, 0);
+  const monthlyBudget = budgetRows.length ? Number(budgetRows[0].monthly_limit) : null;
+  const categories = {};
+  for (const expense of expenses) categories[expense.category] = (categories[expense.category] || 0) + expense.amount;
+
+  res.set('Cache-Control', 'no-store');
+  return res.json({
+    month,
+    monthlyBudget,
+    totalSpent,
+    remaining: monthlyBudget === null ? null : monthlyBudget - totalSpent,
+    categories,
+    expenses,
+  });
+});
+
+app.put('/v1/app/budget', async (req, res) => {
+  const { month, monthlyBudget } = req.body || {};
+  const bounds = monthBounds(month);
+  if (!bounds) return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'month must be a valid YYYY-MM value.' });
+  if (typeof monthlyBudget !== 'number' || !Number.isFinite(monthlyBudget) || monthlyBudget <= 0 || monthlyBudget > 99999999.99) {
+    return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'monthlyBudget must be a positive amount up to KES 99,999,999.99.' });
+  }
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query('SELECT user_id FROM app_users WHERE user_id = ? FOR UPDATE', [req.appUser.id]);
+    const [spentRows] = await conn.query(
+      `SELECT COALESCE(SUM(amount), 0) AS total_spent
+       FROM transactions WHERE user_id = ? AND placed_at >= ? AND placed_at < ?`,
+      [req.appUser.id, bounds.start, bounds.end]
+    );
+    const totalSpent = Number(spentRows[0].total_spent);
+    await conn.query(
+      `INSERT INTO app_monthly_budgets (user_id, month, monthly_limit, updated_at)
+       VALUES (?, ?, ?, UTC_TIMESTAMP())
+       ON DUPLICATE KEY UPDATE monthly_limit = VALUES(monthly_limit), updated_at = UTC_TIMESTAMP()`,
+      [req.appUser.id, month, monthlyBudget]
+    );
+
+    // Mirror the current-month budget into the existing partner-facing budget
+    // resource so its route and response contract remain compatible.
+    if (month === currentLocalMonth()) {
+      await conn.query(
+        `INSERT INTO budgets (user_id, monthly_limit, remaining, currency, updated_at)
+         VALUES (?, ?, ?, 'KES', UTC_TIMESTAMP())
+         ON DUPLICATE KEY UPDATE monthly_limit = VALUES(monthly_limit), remaining = VALUES(remaining), updated_at = UTC_TIMESTAMP()`,
+        [req.appUser.id, monthlyBudget, monthlyBudget - totalSpent]
+      );
+    }
+    await conn.commit();
+    return res.json({ month, monthlyBudget, totalSpent, remaining: monthlyBudget - totalSpent });
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+});
+
+app.post('/v1/app/budget/adjust', async (req, res) => {
+  const { month, action, amount } = req.body || {};
+  const bounds = monthBounds(month);
+  if (!bounds) return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'month must be a valid YYYY-MM value.' });
+  if (action !== 'add' && action !== 'subtract') {
+    return res.status(400).json({ code: 'VALIDATION_ERROR', message: "action must be 'add' or 'subtract'." });
+  }
+  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0 || amount > 99999999.99) {
+    return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Adjustment must be a positive amount up to KES 99,999,999.99.' });
+  }
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query('SELECT user_id FROM app_users WHERE user_id = ? FOR UPDATE', [req.appUser.id]);
+    const [appBudgets] = await conn.query(
+      'SELECT monthly_limit FROM app_monthly_budgets WHERE user_id = ? AND month = ? FOR UPDATE',
+      [req.appUser.id, month]
+    );
+    let currentBudget = appBudgets.length ? Number(appBudgets[0].monthly_limit) : null;
+
+    // Preserve budgets originally created through the partner-facing API.
+    if (currentBudget === null && month === currentLocalMonth()) {
+      const [legacyBudgets] = await conn.query(
+        'SELECT monthly_limit FROM budgets WHERE user_id = ? FOR UPDATE',
+        [req.appUser.id]
+      );
+      if (legacyBudgets.length) currentBudget = Number(legacyBudgets[0].monthly_limit);
+    }
+    if (currentBudget === null) currentBudget = 0;
+    if (action === 'subtract' && currentBudget === 0) {
+      await conn.rollback();
+      return res.status(409).json({ code: 'BUDGET_NOT_SET', message: 'Set a budget before reducing it.' });
+    }
+
+    const adjustedBudget = Math.round((currentBudget + (action === 'add' ? amount : -amount) + Number.EPSILON) * 100) / 100;
+    if (adjustedBudget < 0) {
+      await conn.rollback();
+      return res.status(422).json({ code: 'BUDGET_TOO_LOW', message: 'The reduction cannot make the budget less than zero.' });
+    }
+    if (adjustedBudget > 99999999.99) {
+      await conn.rollback();
+      return res.status(422).json({ code: 'BUDGET_TOO_HIGH', message: 'The adjusted budget cannot exceed KES 99,999,999.99.' });
+    }
+
+    const [spentRows] = await conn.query(
+      `SELECT COALESCE(SUM(amount), 0) AS total_spent
+       FROM transactions WHERE user_id = ? AND placed_at >= ? AND placed_at < ?`,
+      [req.appUser.id, bounds.start, bounds.end]
+    );
+    const totalSpent = Number(spentRows[0].total_spent);
+    await conn.query(
+      `INSERT INTO app_monthly_budgets (user_id, month, monthly_limit, updated_at)
+       VALUES (?, ?, ?, UTC_TIMESTAMP())
+       ON DUPLICATE KEY UPDATE monthly_limit = VALUES(monthly_limit), updated_at = UTC_TIMESTAMP()`,
+      [req.appUser.id, month, adjustedBudget]
+    );
+
+    if (month === currentLocalMonth()) {
+      await conn.query(
+        `INSERT INTO budgets (user_id, monthly_limit, remaining, currency, updated_at)
+         VALUES (?, ?, ?, 'KES', UTC_TIMESTAMP())
+         ON DUPLICATE KEY UPDATE monthly_limit = VALUES(monthly_limit), remaining = VALUES(remaining), updated_at = UTC_TIMESTAMP()`,
+        [req.appUser.id, adjustedBudget, adjustedBudget - totalSpent]
+      );
+    }
+
+    await conn.commit();
+    return res.json({ month, monthlyBudget: adjustedBudget, totalSpent, remaining: adjustedBudget - totalSpent });
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+});
+
+app.post('/v1/app/expenses', async (req, res) => {
+  const { amount, category, description, date } = req.body || {};
+  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0 || amount > 10000000) {
+    return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'amount must be a positive amount up to KES 10,000,000.' });
+  }
+  if (typeof category !== 'string' || !EXPENSE_CATEGORIES.has(category)) {
+    return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Choose a valid expense category.' });
+  }
+  if (typeof description !== 'string' || !description.trim() || description.trim().length > 180) {
+    return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Description must be between 1 and 180 characters.' });
+  }
+  if (!isValidDate(date)) {
+    return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'date must be a real date in YYYY-MM-DD format.' });
+  }
+
+  const placedAt = new Date(`${date}T12:00:00.000Z`);
+  const orderId = `manual_${randomUUID()}`;
+  const entryMonth = date.slice(0, 7);
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [insert] = await conn.query(
+      `INSERT INTO transactions (user_id, order_id, amount, items, currency, placed_at, created_at, category)
+       VALUES (?, ?, ?, ?, 'KES', ?, UTC_TIMESTAMP(), ?)`,
+      [req.appUser.id, orderId, amount, JSON.stringify([description.trim()]), placedAt, category]
+    );
+
+    if (entryMonth === currentLocalMonth()) {
+      const [budgetRows] = await conn.query(
+        'SELECT monthly_limit FROM app_monthly_budgets WHERE user_id = ? AND month = ?',
+        [req.appUser.id, entryMonth]
+      );
+      if (budgetRows.length) {
+        const [spentRows] = await conn.query(
+          `SELECT COALESCE(SUM(amount), 0) AS total_spent
+           FROM transactions WHERE user_id = ? AND placed_at >= ? AND placed_at < ?`,
+          [req.appUser.id, `${entryMonth}-01`, monthBounds(entryMonth).end]
+        );
+        await conn.query(
+          'UPDATE budgets SET remaining = ?, updated_at = UTC_TIMESTAMP() WHERE user_id = ?',
+          [Number(budgetRows[0].monthly_limit) - Number(spentRows[0].total_spent), req.appUser.id]
+        );
+      }
+    }
+
+    const [createdRows] = await conn.query(
+      'SELECT id, amount, items, currency, placed_at, category FROM transactions WHERE id = ?',
+      [insert.insertId]
+    );
+    await conn.commit();
+    return res.status(201).json({ expense: appExpense(createdRows[0]) });
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
   }
 });
 
@@ -173,6 +583,10 @@ app.patch('/v1/users/:id/budget', async (req, res) => {
     await db.query(
       'UPDATE budgets SET monthly_limit = ?, updated_at = ? WHERE user_id = ?',
       [amount, now, req.params.id]
+    );
+    await db.query(
+      'UPDATE app_monthly_budgets SET monthly_limit = ?, updated_at = UTC_TIMESTAMP() WHERE user_id = ? AND month = ?',
+      [amount, req.params.id, currentLocalMonth()]
     );
   } else {
     if (amount > Number(budget.remaining)) {
@@ -340,8 +754,16 @@ app.use((err, req, res, next) => {
 // Only start the server when you run "npm run dev", not when tests load this file
 if (require.main === module) {
   const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
+  const server = app.listen(PORT);
+  server.on('listening', () => {
     console.log(`Pesa Tracker API running at http://localhost:${PORT}/v1`);
+  });
+  server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Stop the other process using it, then restart the API.`);
+      return;
+    }
+    console.error('Pesa Tracker API failed to start:', error.message);
   });
 }
 

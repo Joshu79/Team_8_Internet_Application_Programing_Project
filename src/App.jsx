@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-import {BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate} from "react-router-dom";
+import {BrowserRouter, Routes, Route, Navigate, useNavigate} from "react-router-dom";
 
 import Navbar from "./components/Navbar";
-import Footer from "./components/Footer";
 import SignIn from "./components/SignIn";
 import SignUp from "./components/SignUp";
 
@@ -18,20 +17,38 @@ import "react-toastify/dist/ReactToastify.css";
 import "./App.css";
 
 function App() {
-  const location = useLocation();
   const navigate = useNavigate();
 
   const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    setUser(storedUser ? JSON.parse(storedUser) : null);
-  }, [location]);
+    let active = true;
+    fetch('/v1/app/auth/me', { credentials: 'same-origin' })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const data = await response.json();
+        return data.user || null;
+      })
+      .then((currentUser) => {
+        if (active) setUser(currentUser);
+      })
+      .catch(() => {
+        if (active) setUser(null);
+      })
+      .finally(() => {
+        if (active) setAuthReady(true);
+      });
+    return () => { active = false; };
+  }, []);
 
-  const logout = () => {
-    localStorage.removeItem("user");
-    setUser(null);
-    navigate("/SignIn");
+  const logout = async () => {
+    try {
+      await fetch('/v1/app/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    } finally {
+      setUser(null);
+      navigate('/SignIn');
+    }
   };
 
   const isAuthenticated = !!user;
@@ -55,7 +72,9 @@ function App() {
         setDarkMode={setDarkMode}
       />
 
-      <Routes>
+      {!authReady ? (
+        <main className="auth-loading" role="status">Restoring your session…</main>
+      ) : <Routes>
         {/* Public Routes- pages that can be seen by the public even without login in */}
         <Route
           path="/"
@@ -85,7 +104,7 @@ function App() {
             isAuthenticated ? (
               <Navigate to="/dashboard" />
             ) : (
-              <SignUp />
+              <SignUp setUser={setUser} />
             )
           }
         />
@@ -128,7 +147,7 @@ function App() {
 
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
+      </Routes>}
 
     </>
   );

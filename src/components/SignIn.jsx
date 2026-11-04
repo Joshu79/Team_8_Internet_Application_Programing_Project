@@ -1,7 +1,6 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { useState } from 'react';
 import Footer from './Footer';
 
@@ -21,26 +20,23 @@ const SignIn = ({ setUser }) => {
     setLoading(true);
 
     try {
-      // Temporary test account: use the email prefix as a display name until authentication is connected.
-      const displayName = Email.trim().split('@')[0]
-        .replace(/[._-]+/g, ' ')
-        .trim()
-        .split(/\s+/)
-        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(' ') || 'User';
-      const fakeUser = {
-      id: 1,
-      email: Email.trim(),
-      name: displayName
-    };
-
-    localStorage.setItem("user", JSON.stringify(fakeUser));
-    setUser(fakeUser);
-    navigate("/", { replace: true });
-  }
-    catch (err) {
-    console.log(err);
-  }
+      const response = await fetch('/v1/app/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email: Email, password: Password }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || 'Sign in failed. Please try again.');
+      setUser(data.user);
+      navigate('/dashboard', { replace: true });
+    } catch (err) {
+      setError(err instanceof TypeError
+        ? 'Could not reach Pesa Tracker. Start the API server and database, then try again.'
+        : err.message || 'Sign in failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -101,13 +97,6 @@ const SignIn = ({ setUser }) => {
               type="submit"
               className="btn btn-primary w-100 d-flex justify-content-center align-items-center"
               disabled={Loading}
-              style={{
-                transition: '0.2s', 
-                transform: 'scale(1)',
-                borderRadius: '5px'
-              }}
-              onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
-              onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
             >
               {Loading && (
                 <span

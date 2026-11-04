@@ -21,7 +21,7 @@ const Navbar = ({ isAuthenticated, logout, darkMode, setDarkMode }) => {
                     {isAuthenticated ? (
                         <>
                             <button className='btn1'>
-                                <Link className='App-link text-light text-decoration-none' to="/upload"><i className="bi bi-upload me-2"></i>Upload</Link>
+                                <Link className='App-link text-light text-decoration-none' to="/upload"><i className="bi bi-plus-circle me-2"></i>Add expense</Link>
                             </button> &nbsp;
                             <button className='btn1'>
                                 <Link className='App-link text-light text-decoration-none' to="/dashboard"><i className="bi bi-speedometer2 me-2"></i>Dashboard</Link>
