@@ -2,7 +2,7 @@ TEAM 8
 JOSHUA MUSINGA-API lead
 ASHLEY KEMIGISHA-Backend Devs
 VENUS MBUTHIA-QA lead
-CLAIRE WARIGI-DevOps lead
+NICK ARITA-DevOps lead
 
 PARAGRAPH SUMMARY OF EXISTING APP
 This API is designed to help students effectively track and manage their expenditure. By uploading their expenditure statements to the API, students can easily categorize their different expenses and set specific spending limits for each category. This enables them to monitor their spending, make informed financial decisions, and develop better habits for managing their finances.
