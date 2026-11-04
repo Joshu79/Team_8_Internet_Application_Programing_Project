@@ -4,8 +4,10 @@ const cors = require('cors');
 const db = require('./db');
 const { fetchWithRetry } = require('./resilientFetch'); // your existing MySQL connection
 const { rateLimit } = require('express-rate-limit');
+const { monitor, statsHandler } = require('./monitoring');
 
 const app = express();
+app.use(monitor); // first so rejected requests are logged too
 app.use(cors());          // lets Swagger (a different website) talk to this server
 app.use(express.json());
 // Keys come from .env (API_KEYS), never from the code.
@@ -109,6 +111,7 @@ const limiter = rateLimit({
   },
 });
 app.use(limiter);
+app.get(['/stats', '/v1/stats'], statsHandler);
 
 // THE MAPPING STEP: database row -> exactly the Budget schema in openapi.yaml
 function toBudget(row) {

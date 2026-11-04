@@ -149,13 +149,14 @@ Every error has the same shape, so check the status code first and then `code`:
 ```json
 { "code": "NOT_FOUND", "message": "No budget found for user usr_nobody." }
 ```
-Status	code	When
-400|	VALIDATION_ERROR|	Missing field, wrong type, empty items, currency other than KES
-401	|UNAUTHORIZED	|No X-API-Key header, or the key isn’t valid
-404|	NOT_FOUND	|That user has no budget, or the URL doesn’t exist
-422|	BUDGET_EXCEEDED|	The amount is more than the budget has left
-| 429 | `RATE_LIMITED` | More than 60 requests in a minute on one key. Wait `Retry-After` seconds |
-500	|INTERNAL_ERROR	|Server problem, usually the database is off
+| Status | `code` | When |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | A field is missing, has the wrong type, or is not allowed. |
+| 401 | `UNAUTHORIZED` | The `X-API-Key` header is missing or invalid. |
+| 404 | `NOT_FOUND` | The user has no budget, or the URL doesn't exist. |
+| 422 | `BUDGET_EXCEEDED` | The requested deduction is greater than the remaining budget. |
+| 429 | `RATE_LIMITED` | More than 60 requests in a minute on one key. Wait for `Retry-After` seconds. |
+| 500 | `INTERNAL_ERROR` | Something broke on the server, usually because the database is unavailable. |
 ---
 
 ## Run it locally (from a fresh clone)
@@ -228,3 +229,42 @@ Now try the Quickstart command in a second terminal.
 
 Each API key may make 60 requests per minute. Over the limit you get `429`
 with `{"code":"RATE_LIMITED",...}` and a `Retry-After` header (seconds to wait).
+
+## Request monitoring
+
+Every request is written to the server terminal as one JSON line. Logs include
+the timestamp, method, path without its query string, status, response time in
+milliseconds, and a short API-key fingerprint. Keys, request bodies, and query
+strings are not logged. Log files (`*.log`) are ignored by Git.
+
+`GET http://localhost:5000/stats` (also available at `/v1/stats`) returns
+in-memory totals since the server started. It requires a valid `X-API-Key` and
+is subject to the API rate limit. Counts reset when the server restarts, and a
+`/stats` request appears in the totals after its response has finished.
+
+```sh
+curl -H "X-API-Key: <your-api-key>" http://localhost:5000/stats
+```
+
+Example response:
+
+```json
+{
+  "startedAt": "2026-11-04T08:00:00.000Z",
+  "uptimeSeconds": 120,
+  "total": 42,
+  "clientErrors": 8,
+  "serverErrors": 1,
+  "errorRatePercent": 2.4,
+  "avgMs": 4.7,
+  "routes": {
+    "GET /v1/users/:id/budget": {
+      "count": 12,
+      "clientErrors": 3,
+      "serverErrors": 0,
+      "avgMs": 5.2,
+      "maxMs": 18.1
+    }
+  }
+}
+```
