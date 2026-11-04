@@ -111,7 +111,8 @@ paths:
         schema:
           type: string
           example: "usr_7f2a9c1e"
-
+    
+  
     post:
       summary: Create a transaction
       description: >

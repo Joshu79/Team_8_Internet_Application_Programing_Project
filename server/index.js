@@ -3,12 +3,16 @@ const express = require('express');
 const cors = require('cors');
 const db = require('./db');
 const { fetchWithRetry } = require('./resilientFetch'); // your existing MySQL connection
+const { rateLimit } = require('express-rate-limit');
 
 const app = express();
 app.use(cors());          // lets Swagger (a different website) talk to this server
 app.use(express.json());
 // Keys come from .env (API_KEYS), never from the code.
-const VALID_KEYS = (process.env.API_KEYS || '').split(',').filter(Boolean);
+const VALID_KEYS = (process.env.API_KEYS || '')
+  .split(',')
+  .map((k) => k.trim())   // ignore stray spaces or newlines around a key
+  .filter(Boolean);
 console.log(`Loaded ${VALID_KEYS.length} API keys`); // prints the count only, never the keys
 
 function requireApiKey(req, res, next) {
@@ -88,6 +92,23 @@ app.get('/v1/partner/expenses/summary', async (req, res) => {
 });
 
 app.use(requireApiKey);
+// Rate limit: each API key gets N requests per minute (default 60).
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: Number(process.env.RATE_LIMIT_PER_MIN) || 60,
+  keyGenerator: (req) => req.apiKey,   // count per consumer key, set by requireApiKey
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: (req, res) => {
+    const seconds = Math.max(1, Math.ceil((req.rateLimit.resetTime - Date.now()) / 1000));
+    res.set('Retry-After', String(seconds));
+    res.status(429).json({
+      code: 'RATE_LIMITED',
+      message: `Too many requests. Try again in ${seconds} seconds.`,
+    });
+  },
+});
+app.use(limiter);
 
 // THE MAPPING STEP: database row -> exactly the Budget schema in openapi.yaml
 function toBudget(row) {
@@ -261,6 +282,28 @@ app.post('/v1/users/:id/transactions',         async (req, res) => {
   } finally {
     conn.release(); // give the connection back to the pool
   }
+});
+// GET /users/{id}/transactions  (operationId: listTransactions)
+app.get('/v1/users/:id/transactions', async (req, res) => {
+  // 404 if the user has no budget (same rule as GET /budget)
+  const [budgets] = await db.query(
+    'SELECT 1 FROM budgets WHERE user_id = ?',
+    [req.params.id]
+  );
+  if (budgets.length === 0) {
+    return res.status(404).json({
+      code: 'NOT_FOUND',
+      message: `No budget found for user ${req.params.id}.`,
+    });
+  }
+
+  const [rows] = await db.query(
+    'SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC, id DESC',
+    [req.params.id]
+  );
+
+  // Reuse the existing mapping step so the shape matches POST exactly
+  return res.status(200).json(rows.map(toTransaction));
 });
 
 app.get('/v1/fitcoach/users/:id/summary', async (req, res) => {

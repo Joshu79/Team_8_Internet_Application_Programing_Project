@@ -28,3 +28,8 @@ The original contract didn't list 422 for PATCH; it has been added to
 **Note for StrathsBites (ring partner):** POST /transactions already
 deducts the order amount from the budget. Do not also call
 PATCH with `deduct` for the same order, or the student is charged twice.
+   ## Week 9: Security
+   1. Auth changed from Bearer JWT to an X-API-Key header. Each consumer has
+      its own key. Missing or invalid key returns 401.
+   2. 429 added to every endpoint with a Retry-After header (rate limiting).
+   Flagged to Team 9: they must send X-API-Key instead of Authorization.

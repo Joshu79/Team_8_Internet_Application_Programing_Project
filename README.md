@@ -149,15 +149,13 @@ Every error has the same shape, so check the status code first and then `code`:
 ```json
 { "code": "NOT_FOUND", "message": "No budget found for user usr_nobody." }
 ```
-
-| Status | `code` | When |
-|---|---|---|
-| 400 | `VALIDATION_ERROR` | A field is missing, the wrong type, or not allowed (e.g. `"amount": "450"` in quotes, empty `items`, currency other than KES) |
-| 401 | `UNAUTHORIZED` | No `Authorization: Bearer ...` header |
-| 404 | `NOT_FOUND` | That user has no budget, or the URL doesn't exist |
-| 401 | `UNAUTHORIZED` | No `X-API-Key` header, or the key isn't valid |
-| 500 | `INTERNAL_ERROR` | Something broke on the server (usually the database is off) |
-
+Status	code	When
+400|	VALIDATION_ERROR|	Missing field, wrong type, empty items, currency other than KES
+401	|UNAUTHORIZED	|No X-API-Key header, or the key isn’t valid
+404|	NOT_FOUND	|That user has no budget, or the URL doesn’t exist
+422|	BUDGET_EXCEEDED|	The amount is more than the budget has left
+| 429 | `RATE_LIMITED` | More than 60 requests in a minute on one key. Wait `Retry-After` seconds |
+500	|INTERNAL_ERROR	|Server problem, usually the database is off
 ---
 
 ## Run it locally (from a fresh clone)
@@ -225,3 +223,8 @@ You should see `Pesa Tracker API running at http://localhost:5000/v1`.
 Now try the Quickstart command in a second terminal.
 
 **Run the automated tests:** `npx jest` (inside `server`)
+
+## Rate limits
+
+Each API key may make 60 requests per minute. Over the limit you get `429`
+with `{"code":"RATE_LIMITED",...}` and a `Retry-After` header (seconds to wait).
