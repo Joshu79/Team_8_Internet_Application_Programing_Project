@@ -159,7 +159,7 @@ app.get(['/', '/v1'], (req, res) => {
 const lastGoodByMonth = new Map();
 
 app.get('/v1/partner/expenses/summary', async (req, res) => {
-  const partnerUrl = process.env.PARTNER_API_URL?.replace(/\/$/, '');
+  const partnerUrl = process.env.FITCOACH_URL?.replace(/\/$/, '');
   const partnerUserId = process.env.PARTNER_USER_ID;
   const month = req.query.month;
 
@@ -180,7 +180,10 @@ app.get('/v1/partner/expenses/summary', async (req, res) => {
 
   try {
     const url = `${partnerUrl}/users/${encodeURIComponent(partnerUserId)}/expenses/summary?month=${encodeURIComponent(month)}`;
-    const response = await fetchWithRetry(url, { headers: { Accept: 'application/json' } }, { timeoutMs: 1500, retries: 2, delayMs: 200 });
+    // Team 7 requires an X-API-Key. Send it only when it is set, never log it.
+    const partnerHeaders = { Accept: 'application/json', 'ngrok-skip-browser-warning': '1' };
+    if (process.env.FITCOACH_API_KEY) partnerHeaders['X-API-Key'] = process.env.FITCOACH_API_KEY;
+    const response = await fetchWithRetry(url, { headers: partnerHeaders }, { timeoutMs: 5000, retries: 2, delayMs: 200 });
     if (!response.ok) return sendFallback(`partner returned ${response.status}`);
 
     const summary = await response.json();
